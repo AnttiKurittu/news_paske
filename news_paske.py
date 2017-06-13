@@ -27,6 +27,12 @@ def strip_html_tags(data):
   out = out.replace('&amp;' , '&')
   return out
 
+try:
+  seen_urls = open(".seen_urls", "r")
+  seen_urls = seen_urls.readlines()
+except IOError:
+  seen_urls = []
+
 parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a muppet-friendly format.')
 parser.add_argument("-s",
                     "--start",
@@ -57,7 +63,17 @@ else:
   blurb_min_length = 100
 
 # Process standard input for a list of urls.
+
+seen_out = open(".seen_urls", "a")
 for url in sys.stdin:
+  # Clean URL trackers
+  if "utm_source" in url:
+    url = url.split("?")
+    url = url[0] + "\r\n"
+  if url in seen_urls:
+    urlerrors[url] = "Already seen"
+    continue
+  seen_out.write(url)
   if str(url)[0:4].lower() != "http":
     continue
   page = get_page_contents(url)
@@ -74,8 +90,9 @@ for url in sys.stdin:
     opening_paragraph += 1
     blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
   print( '\033[92m' + url).strip()
-  print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title).strip()
-  print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb).strip()
+  print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title.strip()).replace('\n', '').replace('\r', '')
+  print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
   print("  ")
 for url, error in urlerrors.iteritems():
-  print("%s: %s" % (error, url))
+  print('\033[91m%s:\033[0m %s' % (error, url.strip()))
+
