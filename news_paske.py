@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess
 import re
+import os
 import urllib
 from bs4 import BeautifulSoup
 import sys
@@ -27,10 +28,15 @@ def strip_html_tags(data):
   out = out.replace('&amp;' , '&')
   return out
 
+seen_urls_path = os.path.expanduser("~/.seen_urls")
+
 try:
-  seen_urls = open(".seen_urls", "r")
+  seen_urls = open(seen_urls_path, "r+")
   seen_urls = seen_urls.readlines()
 except IOError:
+  seen_urls = open(seen_urls_path, "w+")
+  seen_urls.write("Seen URLs stored by news_paske.py" + "\r\n")
+  seen_urls.close()
   seen_urls = []
 
 parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a muppet-friendly format.')
@@ -64,7 +70,8 @@ else:
 
 # Process standard input for a list of urls.
 
-seen_out = open(".seen_urls", "a")
+seen_out = open(seen_urls_path, "a")
+
 for url in sys.stdin:
   # Clean URL trackers
   if "utm_source" in url:
@@ -88,11 +95,19 @@ for url in sys.stdin:
   blurb = blurb.strip()
   while len(blurb) < blurb_min_length or 'cookies' in blurb:
     opening_paragraph += 1
-    blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
+    try:
+      blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
+    except IndexError:
+      blurb = False
+      urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
+      break
   print( '\033[92m' + url).strip()
   print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title.strip()).replace('\n', '').replace('\r', '')
-  print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
-  print("  ")
-for url, error in urlerrors.iteritems():
-  print('\033[91m%s:\033[0m %s' % (error, url.strip()))
+  if blurb != False:
+    print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
+
+if urlerrors:
+  print "\033[91mEncountered %s error(s) while processing:" % len(urlerrors)
+  for url, error in urlerrors.iteritems():
+    print('\033[0m * %s: %s' % (error, url.strip()))
 
