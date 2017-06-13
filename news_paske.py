@@ -39,7 +39,7 @@ except IOError:
   seen_urls.close()
   seen_urls = []
 
-parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a muppet-friendly format.')
+parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a Chump IRCbot-friendly format.')
 parser.add_argument("-s",
                     "--start",
                     metavar='[A-Z]',
