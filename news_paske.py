@@ -5,10 +5,12 @@ import re
 import urllib
 from bs4 import BeautifulSoup
 import sys
+import argparse
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 def get_page_contents(url):
+  # Get page contents using curl.
   proc = subprocess.Popen(["curl", "-s", str(url).rstrip()], stdout=subprocess.PIPE)
   (out, err) = proc.communicate()
   page = out.encode('utf8')
@@ -19,15 +21,45 @@ def get_page_contents(url):
     return False
 
 def strip_html_tags(data):
+  # Clear HTML tags
   out = re.compile(r'<.*?>')
   out = out.sub('', data)
   out = out.replace('&amp;' , '&')
   return out
 
-urlerrors = {}
-charcode = 64
+parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a muppet-friendly format.')
+parser.add_argument("-s",
+                    "--start",
+                    metavar='[A-Z]',
+                    type=str,
+                    help="Define which letter to use as the first one instead of A.")
 
+parser.add_argument("-p",
+                    "--paragraph",
+                    metavar='length',
+                    type=int,
+                    help="Define minimum length for opening paragraph. Default 100 characters.")
+
+arg = parser.parse_args()
+
+urlerrors = {}
+
+# Start from a different letter if appending to an existing list of news
+if arg.start:
+  charcode = int(ord(arg.start[0])) - 1
+else:
+  charcode = 64
+
+# Set the minimum length for an acceptable first paragraph
+if arg.paragraph:
+  blurb_min_length = arg.paragraph
+else:
+  blurb_min_length = 100
+
+# Process standard input for a list of urls.
 for url in sys.stdin:
+  if str(url)[0:4].lower() != "http":
+    continue
   page = get_page_contents(url)
   if page == False:
     continue
@@ -38,7 +70,7 @@ for url in sys.stdin:
   opening_paragraph = 0
   blurb = strip_html_tags(str(paragraphs[0]))
   blurb = blurb.strip()
-  while len(blurb) < 100 or 'cookies' in blurb:
+  while len(blurb) < blurb_min_length or 'cookies' in blurb:
     opening_paragraph += 1
     blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
   print( '\033[92m' + url).strip()

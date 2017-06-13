@@ -1,1 +1,12 @@
+news_paske.py eats a list of URLs from stdin and spits out a muppet-friendly list with the title and opening paragraph for easy copy-pasting fun into IRC-based news aggregators. Oh, the wonders of modern technology!
+
+Usage: news_paske.py <list_of_urls.txt
+
+optional arguments:
+
+  -s [A-Z], --start [A-Z]
+                        Define which letter to use as the first one instead of "A".
+
+  -p length, --paragraph length
+                        Define minimum length for opening paragraph. Default 100 characters.
 
