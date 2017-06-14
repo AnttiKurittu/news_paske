@@ -12,6 +12,9 @@ sys.setdefaultencoding('utf-8')
 
 def get_page_contents(url):
   # Get page contents using curl.
+  if url[-5:].strip() == ".pdf":
+    urlerrors[url] = "Can't parse PDF, handle this manually"
+    return False
   proc = subprocess.Popen(["curl", "-s", str(url).rstrip()], stdout=subprocess.PIPE)
   (out, err) = proc.communicate()
   page = out.encode('utf8')
@@ -39,7 +42,7 @@ except IOError:
   seen_urls.close()
   seen_urls = []
 
-parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a Chump IRCbot-friendly format.')
+parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a Chump IRCbot-friendly format. Add URLs to a file, then pipe it to the script. To add a comment to the previous URL, start the line with the plus (+) symbol.')
 parser.add_argument("-s",
                     "--start",
                     metavar='[A-Z]',
@@ -70,41 +73,50 @@ else:
 
 # Process standard input for a list of urls.
 
+print "\r\n=> News_paske.py - A proud member of the NCSC-FI Python-paske line of premium helper scripts. <=\r\n"
+
 seen_out = open(seen_urls_path, "a")
 
 for url in sys.stdin:
   # Clean URL trackers
+  add_as_comment = False
   if "utm_source" in url:
     url = url.split("?")
     url = url[0] + "\r\n"
   if url in seen_urls:
     urlerrors[url] = "Already seen"
     continue
+  if str(url)[0:1] == "+":
+    add_as_comment = True
+  if str(url)[0:4].lower() != "http" and add_as_comment == False:
+    continue
   seen_out.write(url)
-  if str(url)[0:4].lower() != "http":
-    continue
-  page = get_page_contents(url)
-  if page == False:
-    continue
-  charcode += 1
-  soup = BeautifulSoup(page)
-  title = soup.title.string
-  paragraphs = soup.findAll('p')
-  opening_paragraph = 0
-  blurb = strip_html_tags(str(paragraphs[0]))
-  blurb = blurb.strip()
-  while len(blurb) < blurb_min_length or 'cookies' in blurb:
-    opening_paragraph += 1
-    try:
-      blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
-    except IndexError:
-      blurb = False
-      urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
-      break
-  print( '\033[92m' + url).strip()
-  print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title.strip()).replace('\n', '').replace('\r', '')
-  if blurb != False:
-    print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
+  if add_as_comment == True:
+    print( '\033[93m' + chr(charcode) + ':\033[0m\033[1m' + url[1:].strip() + '\033[0m')
+  else:
+    page = get_page_contents(url)
+    if page == False:
+      continue
+    charcode += 1
+    soup = BeautifulSoup(page)
+    title = soup.title.string
+    paragraphs = soup.findAll('p')
+    opening_paragraph = 0
+    blurb = strip_html_tags(str(paragraphs[0]))
+    blurb = blurb.strip()
+    while len("".join(blurb.split())) < blurb_min_length or 'cookies' and 'accept' in blurb:
+      opening_paragraph += 1
+      try:
+        blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
+        blurb = blurb.strip()
+      except IndexError:
+        blurb = False
+        urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
+        break
+    print( '\033[92m' + url).strip()
+    print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title.strip()).replace('\n', '').replace('\r', '')
+    if blurb != False:
+      print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
 
 if urlerrors:
   print "\033[91mEncountered %s error(s) while processing:" % len(urlerrors)
