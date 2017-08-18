@@ -17,7 +17,13 @@ def get_page_contents(url):
     return False
   proc = subprocess.Popen(["curl", "-s", str(url).rstrip()], stdout=subprocess.PIPE)
   (out, err) = proc.communicate()
-  page = out.encode('utf8')
+
+  try:
+    page = out.encode('utf8')
+  except:
+    out = out.decode('latin-1')
+    page = out.encode('utf8')
+
   if len(page) > 0:
     return page
   else:
@@ -31,7 +37,9 @@ def strip_html_tags(data):
   out = out.replace('&amp;' , '&')
   return out
 
-seen_urls_path = os.path.expanduser("~/.seen_urls")
+#seen_urls_path = os.path.expanduser("~/.seen_urls")
+seen_urls_path = ("/ncsc-fi/cases/news_paske_seen/.seen_urls")
+
 
 try:
   seen_urls = open(seen_urls_path, "r+")
@@ -42,7 +50,10 @@ except IOError:
   seen_urls.close()
   seen_urls = []
 
-parser = argparse.ArgumentParser(description='Parse a list of URLs from stdin to a Chump IRCbot-friendly format. Add URLs to a file, then pipe it to the script. To add a comment to the previous URL, start the line with the plus (+) symbol.')
+news_paske_descr = 'News_paske.py will parse a list of URLs from stdin to a Chump IRCbot-friendly format. Add URLs to a file, then pipe it to the script using stdin. Use one line per source url. News_paske will ignore lines not starting with \"http\". To add a comment to the previous URL in the list, start the line with the \"+\" symbol. News_paske.py will collect seen URLs to \033[1m%s\033[0m. To prevent checking and collection of URLs, run the script with the -d option. The script will make a guess on which paragraph is the opening quote, but will sometimes miss. Review the output manually before using it!' % seen_urls_path
+
+
+parser = argparse.ArgumentParser(description=news_paske_descr)
 parser.add_argument("-s",
                     "--start",
                     metavar='[A-Z]',
@@ -54,6 +65,11 @@ parser.add_argument("-p",
                     metavar='length',
                     type=int,
                     help="Define minimum length for opening paragraph. Default 100 characters.")
+
+parser.add_argument("-d",
+                    "--debug",
+                    help="Debug mode - do not store or check seen URLs",
+                    action="store_true")
 
 arg = parser.parse_args()
 
@@ -73,8 +89,6 @@ else:
 
 # Process standard input for a list of urls.
 
-print "\r\n=> News_paske.py - A proud member of the NCSC-FI Python-paske line of premium helper scripts. <=\r\n"
-
 seen_out = open(seen_urls_path, "a")
 
 for url in sys.stdin:
@@ -83,16 +97,17 @@ for url in sys.stdin:
   if "utm_source" in url:
     url = url.split("?")
     url = url[0] + "\r\n"
-  if url in seen_urls:
+  if url in seen_urls and arg.debug != True:
     urlerrors[url] = "Already seen"
     continue
   if str(url)[0:1] == "+":
     add_as_comment = True
   if str(url)[0:4].lower() != "http" and add_as_comment == False:
     continue
-  seen_out.write(url)
+  if arg.debug != True:
+    seen_out.write(url)
   if add_as_comment == True:
-    print( '\033[93m' + chr(charcode) + ':\033[0m\033[1m' + url[1:].strip() + '\033[0m')
+    print( '\033[93m' + chr(charcode) + ':\033[0m' + url[1:].strip() + '')
   else:
     page = get_page_contents(url)
     if page == False:
@@ -113,11 +128,11 @@ for url in sys.stdin:
         blurb = False
         urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
         break
-    print( '\033[92m' + url).strip()
-    print( '\033[93m' + chr(charcode) + ':|' + '\033[0m' + title.strip()).replace('\n', '').replace('\r', '')
+    print( '\r\n\033[4m\033[92m' + url.strip() + '\033[0m')
+    print( '\033[93m' + chr(charcode) + ':|' + '\033[0m\033[1m' + title.strip() + '\033[0m').replace('\n', '').replace('\r', '')
     if blurb != False:
-      print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip()).replace('\n', '').replace('\r', '')
-
+      print( '\033[93m' + chr(charcode) + ':' + '\033[0m' + blurb.strip().replace('\n', '').replace('\r', ''))
+print("")
 if urlerrors:
   print "\033[91mEncountered %s error(s) while processing:" % len(urlerrors)
   for url, error in urlerrors.iteritems():
