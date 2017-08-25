@@ -14,6 +14,7 @@ import requests
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
+#Create a google API key to minify urls
 gapi_key = ''
 
 def get_page_contents(url):
@@ -36,16 +37,14 @@ def get_page_contents(url):
     return False
 
 def shorten_url(url):
-    if gapi_key == '':
-      return "Unable to shorten URL, no API key present."
-    requests.packages.urllib3.disable_warnings()
-    post_url = 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapi_key
-    payload = {'longUrl': url}
-    headers = {'content-type': 'application/json'}
-    payload = json.dumps(payload)
-    r = requests.post(post_url, data=payload, headers=headers)
-    out = json.loads(r.text)
-    return out['id']
+  requests.packages.urllib3.disable_warnings()
+  post_url = 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapi_key
+  payload = {'longUrl': url}
+  headers = {'content-type': 'application/json'}
+  payload = json.dumps(payload)
+  r = requests.post(post_url, data=payload, headers=headers)
+  out = json.loads(r.text)
+  return out['id']
 
 def strip_html_tags(data):
   # Clear HTML tags
@@ -101,6 +100,11 @@ parser.add_argument("-m",
 parser.add_argument("-q",
                     "--quiet",
                     help="Suppress error messages",
+                    action="store_true")
+
+parser.add_argument("-w",
+                    "--wiki",
+                    help="Use MoinMoin Wiki output format and print the headlines in a bullet-point list with 'links.",
                     action="store_true")
 
 parser.add_argument("-d",
@@ -167,7 +171,10 @@ for url in sys.stdin:
   if arg.debug != True:
     seen_out.write(url)
   if add_as_comment == True:
-    print( '\033[93m' + chr(charcode) + ':\033[0m' + url[1:].strip() + '')
+    if arg.wiki == True:
+      print( 'See also: ' + url[1:].strip() + '')
+    else:
+      print( c.Y + chr(charcode) + c.END + url[1:].strip() + '')
   else:
     page = get_page_contents(url)
     if page == False:
@@ -180,9 +187,14 @@ for url in sys.stdin:
       continue
     paragraphs = soup.findAll('p')
     opening_paragraph = 0
-    blurb = strip_html_tags(str(paragraphs[0]))
-    blurb = blurb.strip()
-    while len("".join(blurb.split())) < blurb_min_length or 'cookies' and 'accept' in blurb:
+    try:
+      blurb = strip_html_tags(str(paragraphs[0]))
+      blurb = blurb.strip()
+    except IndexError:
+      blurb = False
+      urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
+      continue
+    while len("".join(blurb.split())) < blurb_min_length or ('cookies' in blurb and 'accept' in blurb):
       opening_paragraph += 1
       try:
         blurb = strip_html_tags(str(paragraphs[opening_paragraph]))
@@ -192,14 +204,18 @@ for url in sys.stdin:
         urlerrors[url] = "No quotable paragraphs found (min %s chars)" % blurb_min_length
         break
     charcode += 1
+
     if arg.minify:
-      short_url = " (" + shorten_url(url.strip()) + ")"
+      short_url = " (" + c.G + c.UL + shorten_url(url.strip()) + c.END + ")"
     else:
       short_url = ""
-    print( '\r\n' + c.UL + c.G + url.strip() + c.END)
-    print( c.Y + chr(charcode) + ':|' + c.END + c.BOLD + title.strip() + c.END).replace('\n', '').replace('\r', '')
-    if blurb != False:
-      print( c.Y + chr(charcode) + ':' + c.END + blurb.strip().replace('\n', '').replace('\r', '') + short_url)
+    if arg.wiki == True:
+      print( ' * [[' + url.strip() + '|' + title.strip().replace('\n', '').replace('\r', '').replace('|', '-') + ']]')
+    else:
+      print( '\r\n' + c.UL + c.G + url.strip() + c.END)
+      print( c.Y + chr(charcode) + ':|' + c.END + c.BOLD + title.strip() + c.END).replace('\n', '').replace('\r', '')
+      if blurb != False:
+        print( c.Y + chr(charcode) + ':' + c.END + blurb.strip().replace('\n', '').replace('\r', '') + short_url)
 
 print("")
 if urlerrors and arg.quiet != True:
